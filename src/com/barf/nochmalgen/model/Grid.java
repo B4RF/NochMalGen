@@ -1,6 +1,7 @@
 package com.barf.nochmalgen.model;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -58,12 +59,11 @@ public class Grid {
 		this.startTime = System.currentTimeMillis();
 	}
 
-	public Color getPos(final int x, final int y) {
-		return this.squares[x][y].getColor();
+	public List<Square> getSquares() {
+		return Arrays.stream(this.squares).flatMap(Arrays::stream).collect(Collectors.toList());
 	}
 
-	public void setPos(final Color color, final int x, final int y) {
-		final Square square = this.squares[x][y];
+	public void setSquare(final Square square, final Color color) {
 		this.changedColors.add(square.getColor());
 
 		square.setColor(color);
@@ -93,6 +93,71 @@ public class Grid {
 			this.changedColors.clear();
 		}
 
+		return isValid;
+	}
+
+	private boolean columnsValid() {
+		boolean isValid = true;
+
+		final Map<Color, Integer> remainingSquaresColumn = new HashMap<>();
+		for (final Color square : Color.values()) {
+			remainingSquaresColumn.put(square, Grid.COLOR_COUNT);
+		}
+
+		outer: for (int i = 0; i < Grid.COLUMN_COUNT; i++) {
+			final int columnIndex = i;
+			final Map<Color, Integer> columnCounts = Stream.of(this.squares).map(s -> s[columnIndex].getColor())
+					.flatMap(s -> Stream.of(s)).collect(Grid.counting(Color.class));
+			final int emptySquares = columnCounts.containsKey(null) ? columnCounts.get(null) : 0;
+			final long differentColors = columnCounts.entrySet().stream()
+					.filter(e -> e.getKey() != null && e.getValue() > 0).map(Map.Entry::getKey).distinct().count();
+
+			if (emptySquares + differentColors < 5) {
+				if (Main.DEBUG) {
+					System.err.println("not all colors in column " + i);
+				}
+				isValid = false;
+				break outer;
+			}
+			if (emptySquares == 0) {
+				Color last = null;
+				int repeats = 0;
+				for (final Square[] square : this.squares) {
+					final Color color = square[i].getColor();
+					if (color == last) {
+						repeats++;
+					}
+					last = color;
+				}
+
+				if (repeats < 2) {
+					if (Main.DEBUG) {
+						System.err.println("More then 5 groups in same column");
+					}
+					isValid = false;
+					break outer;
+				}
+			}
+
+			for (final Entry<Color, Integer> entry : columnCounts.entrySet()) {
+				final Color key = entry.getKey();
+
+				if (key != null && this.changedColors.contains(key)) {
+					final int count = entry.getValue();
+					final int remaining = remainingSquaresColumn.get(key) - (count == 0 ? 1 : count);
+
+					if (remaining < 0) {
+						if (Main.DEBUG) {
+							System.err.println(key.name() + " has not enough squares left for the missing columns");
+						}
+						isValid = false;
+						break outer;
+					} else {
+						remainingSquaresColumn.put(key, remaining);
+					}
+				}
+			}
+		}
 		return isValid;
 	}
 
@@ -158,71 +223,6 @@ public class Grid {
 						break outer;
 					} else {
 						remainingSquaresRow.put(key, remaining);
-					}
-				}
-			}
-		}
-		return isValid;
-	}
-
-	private boolean columnsValid() {
-		boolean isValid = true;
-
-		final Map<Color, Integer> remainingSquaresColumn = new HashMap<>();
-		for (final Color square : Color.values()) {
-			remainingSquaresColumn.put(square, Grid.COLOR_COUNT);
-		}
-
-		outer: for (int i = 0; i < Grid.COLUMN_COUNT; i++) {
-			final int columnIndex = i;
-			final Map<Color, Integer> columnCounts = Stream.of(this.squares).map(s -> s[columnIndex].getColor())
-					.flatMap(s -> Stream.of(s)).collect(Grid.counting(Color.class));
-			final int emptySquares = columnCounts.containsKey(null) ? columnCounts.get(null) : 0;
-			final long differentColors = columnCounts.entrySet().stream()
-					.filter(e -> e.getKey() != null && e.getValue() > 0).map(Map.Entry::getKey).distinct().count();
-
-			if (emptySquares + differentColors < 5) {
-				if (Main.DEBUG) {
-					System.err.println("not all colors in column " + i);
-				}
-				isValid = false;
-				break outer;
-			}
-			if (emptySquares == 0) {
-				Color last = null;
-				int repeats = 0;
-				for (final Square[] square : this.squares) {
-					final Color color = square[i].getColor();
-					if (color == last) {
-						repeats++;
-					}
-					last = color;
-				}
-
-				if (repeats < 2) {
-					if (Main.DEBUG) {
-						System.err.println("More then 5 groups in same column");
-					}
-					isValid = false;
-					break outer;
-				}
-			}
-
-			for (final Entry<Color, Integer> entry : columnCounts.entrySet()) {
-				final Color key = entry.getKey();
-
-				if (key != null && this.changedColors.contains(key)) {
-					final int count = entry.getValue();
-					final int remaining = remainingSquaresColumn.get(key) - (count == 0 ? 1 : count);
-
-					if (remaining < 0) {
-						if (Main.DEBUG) {
-							System.err.println(key.name() + " has not enough squares left for the missing columns");
-						}
-						isValid = false;
-						break outer;
-					} else {
-						remainingSquaresColumn.put(key, remaining);
 					}
 				}
 			}
@@ -321,19 +321,21 @@ public class Grid {
 			final long validationsPerSecond = seconds == 0 ? 0 : this.validations / seconds;
 			System.out.println(this.validations + " " + validationsPerSecond);
 		}
-		outer: for (int i = 0; i < Grid.ROW_COUNT; i++) {
+
+		String board = "";
+		for (int i = 0; i < Grid.ROW_COUNT; i++) {
 			for (int j = 0; j < Grid.COLUMN_COUNT; j++) {
 				final Color color = this.squares[i][j].getColor();
 
 				if (color == null) {
-					System.out.println("");
-					continue outer;
+					board += " ";
+				} else {
+					board += color.name().charAt(0);
 				}
-
-				System.out.print(color.name().charAt(0));
 			}
-			System.out.println("");
+			board += "\n";
 		}
-		System.out.println("");
+
+		System.out.println(board);
 	}
 }
