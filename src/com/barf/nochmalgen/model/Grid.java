@@ -28,6 +28,7 @@ public class Grid {
 	private final List<Color> changedColors = new ArrayList<>();
 
 	private int validations = 0;
+	private long startTime = 0l;
 
 	public Grid() {
 		for (int i = 0; i < Grid.ROW_COUNT; i++) {
@@ -54,6 +55,7 @@ public class Grid {
 				}
 			}
 		}
+		this.startTime = System.currentTimeMillis();
 	}
 
 	public Color getPos(final int x, final int y) {
@@ -77,14 +79,14 @@ public class Grid {
 		this.validations++;
 		boolean isValid = true;
 
-		isValid = this.rowsValid(isValid);
+		isValid = this.columnsValid();
 
 		if (isValid) {
-			isValid = this.columnsValid(isValid);
+			isValid = this.rowsValid();
 		}
 
 		if (isValid) {
-			isValid = this.groupsValid(isValid);
+			isValid = this.groupsValid();
 		}
 
 		if (isValid) {
@@ -94,7 +96,9 @@ public class Grid {
 		return isValid;
 	}
 
-	private boolean rowsValid(boolean isValid) {
+	private boolean rowsValid() {
+		boolean isValid = true;
+
 		final Map<Color, Integer> remainingSquaresRow = new HashMap<>();
 		final Map<Color, Boolean> usedMissingRow = new HashMap<>();
 
@@ -161,9 +165,10 @@ public class Grid {
 		return isValid;
 	}
 
-	private boolean columnsValid(boolean isValid) {
-		final Map<Color, Integer> remainingSquaresColumn = new HashMap<>();
+	private boolean columnsValid() {
+		boolean isValid = true;
 
+		final Map<Color, Integer> remainingSquaresColumn = new HashMap<>();
 		for (final Color square : Color.values()) {
 			remainingSquaresColumn.put(square, Grid.COLOR_COUNT);
 		}
@@ -182,6 +187,25 @@ public class Grid {
 				}
 				isValid = false;
 				break outer;
+			}
+			if (emptySquares == 0) {
+				Color last = null;
+				int repeats = 0;
+				for (final Square[] square : this.squares) {
+					final Color color = square[i].getColor();
+					if (color == last) {
+						repeats++;
+					}
+					last = color;
+				}
+
+				if (repeats < 2) {
+					if (Main.DEBUG) {
+						System.err.println("More then 5 groups in same column");
+					}
+					isValid = false;
+					break outer;
+				}
 			}
 
 			for (final Entry<Color, Integer> entry : columnCounts.entrySet()) {
@@ -206,7 +230,8 @@ public class Grid {
 		return isValid;
 	}
 
-	private boolean groupsValid(boolean isValid) {
+	private boolean groupsValid() {
+		boolean isValid = true;
 		// check for each square type there are 1 to 6 combined squares once
 		final Set<ColorGroup> groups = new HashSet<>();
 
@@ -292,7 +317,9 @@ public class Grid {
 
 	public void print() {
 		if (Main.DEBUG) {
-			System.out.println(this.validations);
+			final long seconds = (System.currentTimeMillis() - this.startTime) / 1000l;
+			final long validationsPerSecond = seconds == 0 ? 0 : this.validations / seconds;
+			System.out.println(this.validations + " " + validationsPerSecond);
 		}
 		outer: for (int i = 0; i < Grid.ROW_COUNT; i++) {
 			for (int j = 0; j < Grid.COLUMN_COUNT; j++) {

@@ -32,6 +32,7 @@ public class Main {
 		System.out.println("done");
 	}
 
+	@SuppressWarnings("resource")
 	private static void generateRows(final Grid grid) {
 		outer: for (int i = 0; i < Grid.ROW_COUNT; i++) {
 			Color lastSquare = null;
@@ -72,13 +73,12 @@ public class Main {
 				if (i == Grid.ROW_COUNT - 1 && j == Grid.COLUMN_COUNT - 1) {
 					grid.print();
 
-					try (Scanner sc = new Scanner(System.in)) {
-						System.out.println("Continue? [y/n]");
+					final Scanner sc = new Scanner(System.in);
+					System.out.println("Continue? [y/n]");
 
-						if ("y".equalsIgnoreCase(sc.nextLine())) {
-							lastSquare = grid.getPos(i, j);
-							j--;
-						}
+					if ("y".equalsIgnoreCase(sc.nextLine())) {
+						lastSquare = grid.getPos(i, j);
+						j--;
 					}
 				}
 			}
@@ -86,6 +86,7 @@ public class Main {
 		}
 	}
 
+	@SuppressWarnings("resource")
 	private static void generateColumns(final Grid grid) {
 		outer: for (int j = 0; j < Grid.COLUMN_COUNT; j++) {
 			Color lastSquare = null;
@@ -126,13 +127,12 @@ public class Main {
 				if (i == Grid.ROW_COUNT - 1 && j == Grid.COLUMN_COUNT - 1) {
 					grid.print();
 
-					try (Scanner sc = new Scanner(System.in)) {
-						System.out.println("Continue? [y/n]");
+					final Scanner sc = new Scanner(System.in);
+					System.out.println("Continue? [y/n]");
 
-						if ("y".equalsIgnoreCase(sc.nextLine())) {
-							lastSquare = grid.getPos(i, j);
-							i--;
-						}
+					if ("y".equalsIgnoreCase(sc.nextLine())) {
+						lastSquare = grid.getPos(i, j);
+						i--;
 					}
 				}
 			}
