@@ -16,12 +16,17 @@ import com.barf.nochmalgen.model.Square;
 public class Main {
 
 	public static boolean DEBUG = false;
+	public static boolean COLOR_MODE = true;
 
 	final static Map<Square, Color[]> shuffles = new HashMap<>();
 	final static List<Color> squareIndex = Arrays.asList(null, Color.GREEN, Color.YELLOW, Color.BLUE, Color.RED,
 			Color.ORANGE);
 
 	public static void main(final String[] args) {
+
+		if (args.length > 0) {
+			Main.COLOR_MODE = Boolean.parseBoolean(args[0]);
+		}
 
 		final Grid grid = new Grid();
 

@@ -105,39 +105,45 @@ public class Grid {
 		}
 
 		outer: for (int i = 0; i < Grid.COLUMN_COUNT; i++) {
-			final int columnIndex = i;
-			final Map<Color, Integer> columnCounts = Stream.of(this.squares).map(s -> s[columnIndex].getColor())
-					.flatMap(s -> Stream.of(s)).collect(Grid.counting(Color.class));
-			final int emptySquares = columnCounts.containsKey(null) ? columnCounts.get(null) : 0;
-			final long differentColors = columnCounts.entrySet().stream()
-					.filter(e -> e.getKey() != null && e.getValue() > 0).map(Map.Entry::getKey).distinct().count();
 
-			if (emptySquares + differentColors < 5) {
+			final List<Color> seenColors = new ArrayList<>();
+			int repeats = 0;
+			Color previous = null;
+			Color preprevious = null;
+
+			for (final Square[] row : this.squares) {
+				final Color color = row[i].getColor();
+
+				if (color != null) {
+					if (seenColors.contains(color)) {
+						if (Main.DEBUG) {
+							System.err.println("More then 5 groups in same column");
+						}
+						isValid = false;
+						break outer;
+					} else if (color == previous) {
+						repeats++;
+					} else if (previous == null && color == preprevious) {
+						repeats += 2;
+					}
+				}
+
+				preprevious = previous;
+				previous = color;
+				seenColors.add(preprevious);
+			}
+
+			if (repeats > 2) {
 				if (Main.DEBUG) {
-					System.err.println("not all colors in column " + i);
+					System.err.println("Not all colors in column");
 				}
 				isValid = false;
 				break outer;
 			}
-			if (emptySquares == 0) {
-				Color last = null;
-				int repeats = 0;
-				for (final Square[] square : this.squares) {
-					final Color color = square[i].getColor();
-					if (color == last) {
-						repeats++;
-					}
-					last = color;
-				}
 
-				if (repeats < 2) {
-					if (Main.DEBUG) {
-						System.err.println("More then 5 groups in same column");
-					}
-					isValid = false;
-					break outer;
-				}
-			}
+			final int columnIndex = i;
+			final Map<Color, Integer> columnCounts = Stream.of(this.squares).map(s -> s[columnIndex].getColor())
+					.flatMap(s -> Stream.of(s)).collect(Grid.counting(Color.class));
 
 			for (final Entry<Color, Integer> entry : columnCounts.entrySet()) {
 				final Color key = entry.getKey();
@@ -322,20 +328,48 @@ public class Grid {
 			System.out.println(this.validations + " " + validationsPerSecond);
 		}
 
-		String board = "";
+		final String RESET = Main.COLOR_MODE ? "\u001B[0m" : "";
+
+		final String GREEN = Main.COLOR_MODE ? "\u001B[42m  " : "G ";
+		final String YELLOW = Main.COLOR_MODE ? "\u001B[103m  " : "Y ";
+		final String BLUE = Main.COLOR_MODE ? "\u001B[104m  " : "B ";
+		final String RED = Main.COLOR_MODE ? "\u001B[101m  " : "R ";
+		final String ORANGE = Main.COLOR_MODE ? "\u001B[105m  " : "O ";
+
+		final String COLUMN_LETTERS = "\n" + (Main.COLOR_MODE ? "" : " ") + " A B C D E F G H I J K L M N O";
+		final String TOP_BOTTOM = "+" + (Main.COLOR_MODE ? "" : "-") + "------------------------------+";
+
+		System.out.println(COLUMN_LETTERS);
+		System.out.println(TOP_BOTTOM);
 		for (int i = 0; i < Grid.ROW_COUNT; i++) {
+			System.out.print(Main.COLOR_MODE ? RESET + "|" : "| ");
 			for (int j = 0; j < Grid.COLUMN_COUNT; j++) {
 				final Color color = this.squares[i][j].getColor();
 
 				if (color == null) {
-					board += " ";
+					System.out.print(RESET + "  ");
 				} else {
-					board += color.name().charAt(0);
+					switch (color) {
+					case BLUE:
+						System.out.print(BLUE);
+						break;
+					case GREEN:
+						System.out.print(GREEN);
+						break;
+					case ORANGE:
+						System.out.print(ORANGE);
+						break;
+					case RED:
+						System.out.print(RED);
+						break;
+					case YELLOW:
+						System.out.print(YELLOW);
+						break;
+					}
 				}
 			}
-			board += "\n";
+			System.out.println(RESET + "|");
 		}
-
-		System.out.println(board);
+		System.out.println(TOP_BOTTOM);
 	}
 }
