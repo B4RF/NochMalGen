@@ -15,16 +15,6 @@ public class Square {
 
 	public void setColor(final Color color) {
 		this.color = color;
-
-		if (this.colorGroup != null) {
-			this.colorGroup.inValidate();
-		}
-
-		for (final Square square : this.neighbors) {
-			if (square.getColorGroup() != null) {
-				square.getColorGroup().inValidate();
-			}
-		}
 	}
 
 	public ColorGroup getColorGroup() {
@@ -41,5 +31,24 @@ public class Square {
 
 	public void addNeighbor(final Square square) {
 		this.neighbors.add(square);
+	}
+
+	public List<Color> updateGroups() {
+		final List<Color> colors = new ArrayList<>();
+		colors.add(this.color);
+
+		if (this.colorGroup != null) {
+			this.colorGroup.inValidate();
+		}
+
+		for (final Square square : this.neighbors) {
+			colors.add(square.getColor());
+
+			if (square.getColorGroup() != null) {
+				square.getColorGroup().inValidate();
+			}
+		}
+
+		return colors;
 	}
 }

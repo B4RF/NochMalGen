@@ -2,6 +2,7 @@ package com.barf.nochmalgen.model;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -26,7 +27,7 @@ public class Grid {
 
 	private final Square[][] squares = new Square[Grid.ROW_COUNT][Grid.COLUMN_COUNT];
 
-	private final List<Color> changedColors = new ArrayList<>();
+	private final Set<Color> changedColors = new HashSet<>();
 
 	private int validations = 0;
 	private long startTime = 0l;
@@ -67,7 +68,9 @@ public class Grid {
 		this.changedColors.add(square.getColor());
 
 		square.setColor(color);
-		this.changedColors.add(color);
+		this.changedColors.addAll(square.updateGroups());
+
+		this.changedColors.remove(null);
 	}
 
 	public static <T extends Enum<T>> Collector<T, ?, Map<T, Integer>> counting(final Class<T> type) {
@@ -76,8 +79,11 @@ public class Grid {
 	}
 
 	public boolean isValid() {
-		this.validations++;
 		boolean isValid = true;
+
+		if (Main.DEBUG) {
+			this.validations++;
+		}
 
 		isValid = this.columnsValid();
 
@@ -148,7 +154,7 @@ public class Grid {
 			for (final Entry<Color, Integer> entry : columnCounts.entrySet()) {
 				final Color key = entry.getKey();
 
-				if (key != null && this.changedColors.contains(key)) {
+				if (this.changedColors.contains(key)) {
 					final int count = entry.getValue();
 					final int remaining = remainingSquaresColumn.get(key) - (count == 0 ? 1 : count);
 
@@ -196,7 +202,7 @@ public class Grid {
 			for (final Entry<Color, Integer> entry : rowCounts.entrySet()) {
 				final Color key = entry.getKey();
 
-				if (key != null && this.changedColors.contains(key)) {
+				if (this.changedColors.contains(key)) {
 					final int count = entry.getValue();
 
 					if (count == 0) {
@@ -243,23 +249,17 @@ public class Grid {
 
 		for (int i = 0; i < Grid.ROW_COUNT; i++) {
 			for (int j = 0; j < Grid.COLUMN_COUNT; j++) {
-				final Square square = this.squares[i][j];
-
-				if (square == null) {
-					continue;
-				}
-
 				groups.add(this.getSquareGroup(i, j));
 			}
 		}
 
-		outer: for (final Color color : Color.values()) {
+		outer: for (final Color color : this.changedColors) {
 			final List<ColorGroup> colorGroups = groups.stream().filter(g -> g.getColor() == color)
 					.collect(Collectors.toList());
 			final TreeSet<Integer> possibleSizes = new TreeSet<>(
 					Stream.of(1, 2, 3, 4, 5, 6).collect(Collectors.toSet()));
-			final List<Integer> unfinishedSizes = new ArrayList<>();
 
+			final List<Integer> unfinishedSizes = new ArrayList<>();
 			for (final ColorGroup group : colorGroups) {
 				if (group.isFinished()) {
 					if (!possibleSizes.remove(Integer.valueOf(group.getSize()))) {
@@ -275,6 +275,8 @@ public class Grid {
 			}
 
 			// unfinished groups will have to use the same size
+			Collections.sort(unfinishedSizes, Collections.reverseOrder());
+			final List<Integer> unMatchedSizes = new ArrayList<>();
 			for (final Integer size : unfinishedSizes) {
 				final Integer match = possibleSizes.ceiling(size);
 
@@ -284,9 +286,37 @@ public class Grid {
 					}
 					isValid = false;
 					break outer;
-				} else {
+				} else if (match <= size + 1) {
 					possibleSizes.remove(match);
+				} else {
+					unMatchedSizes.add(size);
 				}
+			}
+
+			Collections.sort(unMatchedSizes, Collections.reverseOrder());
+			for (final Integer size : possibleSizes.descendingSet()) {
+				// one square needed to combine others
+				int remainingSize = size - 1;
+
+				final List<Integer> matched = new ArrayList<>();
+				for (final Integer unMatchedSize : unMatchedSizes) {
+					if (unMatchedSize <= remainingSize) {
+						matched.add(unMatchedSize);
+						remainingSize -= unMatchedSize;
+					}
+				}
+
+				for (final Integer matchedSize : matched) {
+					unMatchedSizes.remove(matchedSize);
+				}
+			}
+
+			if (!unMatchedSizes.isEmpty()) {
+				if (Main.DEBUG) {
+					System.err.println("unfinished group sizes for " + color.name() + " not valid");
+				}
+				isValid = false;
+				break outer;
 			}
 		}
 		return isValid;
