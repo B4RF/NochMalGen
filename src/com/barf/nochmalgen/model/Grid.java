@@ -245,23 +245,35 @@ public class Grid {
 	private boolean groupsValid() {
 		boolean isValid = true;
 		// check for each square type there are 1 to 6 combined squares once
-		final Set<ColorGroup> groups = new HashSet<>();
+		final Set<ColorGroup> noColorGroups = new HashSet<>();
 
 		for (int i = 0; i < Grid.ROW_COUNT; i++) {
 			for (int j = 0; j < Grid.COLUMN_COUNT; j++) {
-				groups.add(this.getSquareGroup(i, j));
+				if (this.squares[i][j].getColor() == null) {
+					noColorGroups.add(this.getSquareGroup(i, j));
+				}
 			}
 		}
 
-		outer: for (final Color color : this.changedColors) {
-			final List<ColorGroup> colorGroups = groups.stream().filter(g -> g.getColor() == color)
-					.collect(Collectors.toList());
+		final Set<ColorGroup> coloredGroups = new HashSet<>();
+
+		for (int i = 0; i < Grid.ROW_COUNT; i++) {
+			for (int j = 0; j < Grid.COLUMN_COUNT; j++) {
+				if (this.squares[i][j].getColor() != null) {
+					coloredGroups.add(this.getSquareGroup(i, j));
+				}
+			}
+		}
+
+		outer: for (final Color color : Color.values()) {
+			final Set<ColorGroup> colorGroups = coloredGroups.stream().filter(g -> g.getColor() == color)
+					.collect(Collectors.toSet());
 			final TreeSet<Integer> possibleSizes = new TreeSet<>(
 					Stream.of(1, 2, 3, 4, 5, 6).collect(Collectors.toSet()));
 
-			final List<Integer> unfinishedSizes = new ArrayList<>();
+			final Set<ColorGroup> unfinishedGroups = new HashSet<>();
 			for (final ColorGroup group : colorGroups) {
-				if (group.isFinished()) {
+				if (group.getConnectedNCGroups().size() == 0) {
 					if (!possibleSizes.remove(Integer.valueOf(group.getSize()))) {
 						if (Main.DEBUG) {
 							System.err.println("finished group sizes for " + color.name() + " not valid");
@@ -270,48 +282,53 @@ public class Grid {
 						break outer;
 					}
 				} else {
-					unfinishedSizes.add(group.getSize());
+					unfinishedGroups.add(group);
 				}
 			}
 
-			// unfinished groups will have to use the same size
-			Collections.sort(unfinishedSizes, Collections.reverseOrder());
-			final List<Integer> unMatchedSizes = new ArrayList<>();
-			for (final Integer size : unfinishedSizes) {
-				final Integer match = possibleSizes.ceiling(size);
+			Set<CombinedGroups> combined = this.combineGroups(null, unfinishedGroups);
+
+			while (!possibleSizes.isEmpty() && !combined.isEmpty()) {
+				CombinedGroups match = null;
+				Integer matchedSize = 0;
+
+				sizes: for (final Integer size : possibleSizes.descendingSet()) {
+					for (final CombinedGroups combi : combined) {
+						if (combi.getMinSize() == size) {
+							match = combi;
+							matchedSize = size;
+							break sizes;
+						}
+					}
+				}
+
+				if (match == null) {
+					sizes: for (final Integer size : possibleSizes.descendingSet()) {
+						for (final CombinedGroups combi : combined) {
+							if (combi.getMinSize() <= size && combi.getMaxSize() >= size) {
+								match = combi;
+								matchedSize = size;
+								break sizes;
+							}
+						}
+					}
+				}
 
 				if (match == null) {
 					if (Main.DEBUG) {
-						System.err.println("unfinished group sizes for " + color.name() + " not valid");
+						System.err.println("no match found for unfinished " + color.name() + " group");
 					}
 					isValid = false;
 					break outer;
-				} else if (match <= size + 1) {
-					possibleSizes.remove(match);
 				} else {
-					unMatchedSizes.add(size);
+					possibleSizes.remove(matchedSize);
+					final Set<ColorGroup> matchedGroups = match.getColorGroups();
+					combined = combined.stream().filter(c -> Collections.disjoint(matchedGroups, c.getColorGroups()))
+							.collect(Collectors.toSet());
 				}
 			}
 
-			Collections.sort(unMatchedSizes, Collections.reverseOrder());
-			for (final Integer size : possibleSizes.descendingSet()) {
-				// one square needed to combine others
-				int remainingSize = size - 1;
-
-				final List<Integer> matched = new ArrayList<>();
-				for (final Integer unMatchedSize : unMatchedSizes) {
-					if (unMatchedSize <= remainingSize) {
-						matched.add(unMatchedSize);
-						remainingSize -= unMatchedSize;
-					}
-				}
-
-				for (final Integer matchedSize : matched) {
-					unMatchedSizes.remove(matchedSize);
-				}
-			}
-
-			if (!unMatchedSizes.isEmpty()) {
+			if (!combined.isEmpty()) {
 				if (Main.DEBUG) {
 					System.err.println("unfinished group sizes for " + color.name() + " not valid");
 				}
@@ -341,7 +358,7 @@ public class Grid {
 						if (neighbor.getColor() == group.getColor()) {
 							queue.add(neighbor);
 						} else if (neighbor.getColor() == null) {
-							group.setFinished(false);
+							group.addNoColorGroup(neighbor.getColorGroup());
 						}
 					}
 				}
@@ -349,6 +366,30 @@ public class Grid {
 		}
 
 		return group;
+	}
+
+	private Set<CombinedGroups> combineGroups(final CombinedGroups combined, final Set<ColorGroup> groups) {
+		final Set<CombinedGroups> combis = new HashSet<>();
+		Set<ColorGroup> connectors = new HashSet<>();
+
+		if (combined != null) {
+			combis.add(combined);
+
+			connectors = combined.getColorGroups().stream().map(c -> c.getConnectedNCGroups()).flatMap(Set::stream)
+					.distinct().collect(Collectors.toSet());
+		}
+
+		for (final ColorGroup group : groups) {
+			if (combined == null || !Collections.disjoint(connectors, group.getConnectedNCGroups())) {
+				final Set<ColorGroup> enhancedCombi = combined == null ? new HashSet<>() : combined.getColorGroups();
+				enhancedCombi.add(group);
+				final Set<ColorGroup> reducedGroup = new HashSet<>(groups);
+				reducedGroup.remove(group);
+				combis.addAll(this.combineGroups(new CombinedGroups(enhancedCombi), reducedGroup));
+			}
+		}
+
+		return combis;
 	}
 
 	public void print() {
